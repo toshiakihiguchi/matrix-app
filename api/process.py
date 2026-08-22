@@ -17,6 +17,7 @@ class handler(BaseHTTPRequestHandler):
 
             file_b64 = data.get("file")
             mime_type = data.get("mimeType", "image/png")
+            dept_time = data.get("deptTime", "明日の 10:30 出発")
 
             if not file_b64:
                 self.send_error(400, "ファイルデータが送信されていません。")
@@ -28,10 +29,11 @@ class handler(BaseHTTPRequestHandler):
                 return
 
             genai.configure(api_key=api_key)
+            # 最新の安定型モデルに修正
             model = genai.GenerativeModel('gemini-2.0-flash')
 
-            prompt = """
-添付資料（画像またはPDF）に記載されている全ての施設名・店舗名・住所・駅名を読み取り、以下の【略称変換ルール】を厳格に適用して正式名称を特定し、移動所要時間マトリックスデータをJSONのみで作成してください。
+            prompt = f"""
+添付資料（画像またはPDF）に記載されている全ての施設名・店舗名・住所・駅名を読み取り、以下の【略称変換ルール】を厳格に適用して正式名称を特定し、「{dept_time}」における移動所要時間マトリックスデータをJSONのみで作成してください。
 
 【略称変換ルール】
 - みらい千林西 ➔ 関西みらい銀行 千林西支店
@@ -54,9 +56,9 @@ class handler(BaseHTTPRequestHandler):
 
 【出力JSON構造】
 ```json
-{
+{{
   "locations": [
-    { "no": 1, "raw_name": "画像表記", "official_name": "正式名称", "address": "住所", "stations": "最寄り駅一覧" }
+    {{ "no": 1, "raw_name": "画像表記", "official_name": "正式名称", "address": "住所", "stations": "最寄り駅一覧" }}
   ],
   "transit": [
     ["出発地／目的地", "拠点A", "拠点B"],
@@ -73,4 +75,4 @@ class handler(BaseHTTPRequestHandler):
     ["拠点A", "同地点", "〇分 (〇km)"],
     ["拠点B", "〇分 (〇km)", "同地点"]
   ]
-}
+}}
