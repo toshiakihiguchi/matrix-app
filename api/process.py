@@ -29,7 +29,8 @@ class handler(BaseHTTPRequestHandler):
                 return
 
             genai.configure(api_key=api_key)
-            model = genai.GenerativeModel('gemini-2.5-flash')
+            # 最新標準エイリアスを指定してバージョン変更エラーを回避
+            model = genai.GenerativeModel('gemini-flash')
 
             prompt = (
                 "添付資料（画像またはPDF）に記載されている全ての施設名・店舗名・住所・駅名を読み取り、"
