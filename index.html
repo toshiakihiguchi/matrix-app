@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ROUTE MATRIX AI Pro</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: #f8fafc; color: #0f172a; margin: 0; padding: 20px; }
+        .container { max-width: 480px; margin: 20px auto; background: #ffffff; padding: 24px; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; }
+        .header { background: #0f172a; color: #38bdf8; text-align: center; padding: 16px; border-radius: 12px; font-weight: bold; font-size: 18px; margin-bottom: 20px; }
+        .card { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+        .card-title { font-size: 12px; font-weight: bold; color: #0f172a; margin-bottom: 10px; }
+        input[type="password"] { width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px; box-sizing: border-box; background: #f1f5f9; font-size: 14px; margin-bottom: 8px; }
+        .btn-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+        .btn-upload { padding: 14px 8px; border-radius: 12px; text-align: center; cursor: pointer; font-weight: bold; font-size: 13px; text-decoration: none; border: 2px solid; }
+        .btn-cam { background: #ecfdf5; border-color: #10b981; color: #047857; }
+        .btn-file { background: #eff6ff; border-color: #2563eb; color: #1d4ed8; }
+        .sub-text { font-size: 10px; display: block; margin-top: 4px; opacity: 0.8; font-weight: normal; }
+        select { width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #f8fafc; font-size: 13px; }
+        .btn-main { width: 100%; background: #0f172a; color: white; padding: 16px; border: none; border-radius: 12px; font-weight: bold; font-size: 15px; cursor: pointer; }
+        .result-card { background: #f0fdf4; border: 2px solid #10b981; border-radius: 12px; padding: 16px; text-align: center; display: none; margin-top: 20px; }
+        .btn-download { display: inline-block; width: 100%; background: white; color: #15803d; border: 1px solid #16a34a; padding: 12px; border-radius: 8px; font-weight: bold; text-decoration: none; box-sizing: border-box; margin-top: 10px; font-size: 13px; }
+        #fileInputCam, #fileInputLib { display: none; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="header">ROUTE MATRIX AI Pro</div>
+
+    <!-- 1. パスワード認証 -->
+    <div class="card" id="lockSection">
+        <div class="card-title">🔒 パスワード認証 (セキュリティ保護)</div>
+        <input type="password" id="pwd" placeholder="パスワードを入力">
+        <button class="btn-main" style="padding:10px; font-size:13px;" onclick="unlock()">解除</button>
+    </div>
+
+    <!-- 2. ファイル読み込み (認証後に表示) -->
+    <div class="card" id="appSection" style="display:none;">
+        <div class="card-title">📸 資料読み込み (画像 / PDF)</div>
+        <div class="btn-grid">
+            <label class="btn-upload btn-cam">
+                📷 カメラ起動
+                <span class="sub-text">撮影して即解析</span>
+                <input type="file" id="fileInputCam" accept="image/*" capture="environment" onchange="handleFileSelect(this)">
+            </label>
+            <label class="btn-upload btn-file">
+                📂 ファイル選択
+                <span class="sub-text">画像・PDF参照</span>
+                <input type="file" id="fileInputLib" accept="image/*,application/pdf" onchange="handleFileSelect(this)">
+            </label>
+        </div>
+        <div id="selectedFileName" style="font-size:11px; color:#64748b; margin-bottom:10px;"></div>
+
+        <div class="card-title" style="margin-top:10px;">⏰ 出発条件設定</div>
+        <select id="timeSelect">
+            <option>明日の 10:30 出発</option>
+            <option>本日の 現在時刻</option>
+        </select>
+        
+        <button class="btn-main" style="margin-top:16px;" onclick="generateMatrix()">⚡ 移動マトリックスExcelを自動生成</button>
+    </div>
+
+    <!-- 3. 結果出力 -->
+    <div class="result-card" id="resultCard">
+        <div style="font-weight:bold; color:#15803d; font-size:14px;">🎉 解析・ファイル出力完了！</div>
+        <a id="downloadBtn" href="#" class="btn-download">📊 移動所要時間マトリックス.xlsx を保存</a>
+        <div style="font-size:10px; color:#475569; margin-top:8px;">
+            ・正式名称補正・辞書ルール適用済み<br>
+            ・全セルGoogleマップルート案内リンク埋め込み完了
+        </div>
+    </div>
+</div>
+
+<script>
+let selectedFile = null;
+
+function unlock() {
+    if (document.getElementById('pwd').value === 'gemini0777') {
+        document.getElementById('lockSection').style.display = 'none';
+        document.getElementById('appSection').style.display = 'block';
+    } else {
+        alert('パスワードが正しくありません。');
+    }
+}
+
+function handleFileSelect(input) {
+    if (input.files && input.files[0]) {
+        selectedFile = input.files[0];
+        document.getElementById('selectedFileName').innerText = '選択中: ' + selectedFile.name;
+    }
+}
+
+async function generateMatrix() {
+    if (!selectedFile) {
+        alert('画像またはPDFを選択してください。');
+        return;
+    }
+    alert('AI解析およびルート所要時間の算出処理を実行中です（数秒かかります）...');
+    
+    const formData = new FormData();
+    formData.append('file', selectedFile);
+    formData.append('time', document.getElementById('timeSelect').value);
+
+    try {
+        const response = await fetch('/api/process', { method: 'POST', body: formData });
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.getElementById('downloadBtn');
+        a.href = url;
+        a.download = '移動所要時間マトリックス.xlsx';
+        document.getElementById('resultCard').style.display = 'block';
+    } catch (e) {
+        alert('処理中にエラーが発生しました。');
+    }
+}
+</script>
+
+</body>
+</html>
