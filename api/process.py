@@ -28,7 +28,7 @@ class handler(BaseHTTPRequestHandler):
                 return
 
             genai.configure(api_key=api_key)
-            model = genai.GenerativeModel('gemini-2.5-flash')
+            model = genai.GenerativeModel('gemini-2.0-flash')
 
             prompt = """
 添付資料（画像またはPDF）に記載されている全ての施設名・店舗名・住所・駅名を読み取り、以下の【略称変換ルール】を厳格に適用して正式名称を特定し、移動所要時間マトリックスデータをJSONのみで作成してください。
