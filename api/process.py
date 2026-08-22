@@ -29,7 +29,6 @@ class handler(BaseHTTPRequestHandler):
                 return
 
             genai.configure(api_key=api_key)
-            # 最新の安定型モデルに修正
             model = genai.GenerativeModel('gemini-2.0-flash')
 
             prompt = f"""
