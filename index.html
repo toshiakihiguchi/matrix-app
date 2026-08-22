@@ -8,11 +8,15 @@
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f0f2f5; display: flex; justify-content: center; padding: 20px; }
     .card { background: white; border-radius: 16px; padding: 24px; max-width: 480px; width: 100%; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
     h2 { font-size: 20px; margin-top: 0; text-align: center; color: #1a1a1a; }
-    .btn { width: 100%; padding: 14px; border: none; border-radius: 10px; font-weight: bold; cursor: pointer; font-size: 15px; margin-top: 12px; }
+    .btn { width: 100%; padding: 14px; border: none; border-radius: 10px; font-weight: bold; cursor: pointer; font-size: 15px; margin-top: 16px; }
     .btn-main { background: #0f172a; color: white; }
     .btn-main:disabled { background: #94a3b8; }
-    .input-box { width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px; margin-top: 8px; box-sizing: border-box; }
-    .file-select { display: border-box; border: 2px dashed #3b82f6; background: #eff6ff; padding: 20px; text-align: center; border-radius: 12px; cursor: pointer; margin-top: 12px; }
+    .input-box { width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px; margin-top: 6px; box-sizing: border-box; font-size: 14px; }
+    .file-select { border: 2px dashed #3b82f6; background: #eff6ff; padding: 20px; text-align: center; border-radius: 12px; cursor: pointer; margin-top: 12px; }
+    .label { font-size: 13px; font-weight: bold; color: #334155; margin-top: 14px; display: block; }
+    .date-container { display: flex; gap: 8px; align-items: center; }
+    .date-input { flex: 2; }
+    .day-display { flex: 1; background: #e2e8f0; text-align: center; font-weight: bold; color: #1e293b; cursor: not-allowed; }
     #error-msg { color: #dc2626; font-size: 13px; margin-top: 10px; word-break: break-all; white-space: pre-wrap; background: #fef2f2; padding: 10px; border-radius: 8px; display: none; }
   </style>
 </head>
@@ -28,10 +32,20 @@
 
   <div id="app-section" style="display:none;">
     <div class="file-select" onclick="document.getElementById('file-input').click()">
-      📁 画像 / PDF ファイルを選択
+      📷/📁 資料読み込み（画像・PDF）
       <input type="file" id="file-input" style="display:none" accept="image/*,application/pdf" onchange="fileSelected(this)">
       <div id="file-name" style="font-size:12px; color:#475569; margin-top:6px;">選択されていません</div>
     </div>
+
+    <!-- 出発条件設定エリア -->
+    <span class="label">⏰ 出発日付の設定</span>
+    <div class="date-container">
+      <input type="date" id="dept-date" class="input-box date-input" onchange="updateWeekday()">
+      <input type="text" id="dept-day" class="input-box day-display" readonly placeholder="(曜日)">
+    </div>
+
+    <span class="label">🕒 出発時刻の設定</span>
+    <input type="time" id="dept-time" class="input-box" value="10:30">
 
     <button id="gen-btn" class="btn btn-main" onclick="generate()" disabled>⚡ 移動マトリックスExcelを自動生成</button>
     
@@ -43,6 +57,31 @@
 <script>
   let selectedFileB64 = "";
   let selectedMime = "";
+
+  // 初期化：翌日の日付を自動セット＆曜日計算
+  window.onload = function() {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    
+    const yyyy = tomorrow.getFullYear();
+    const mm = String(tomorrow.getMonth() + 1).padStart(2, '0');
+    const dd = String(tomorrow.getDate()).padStart(2, '0');
+    
+    const dateInput = document.getElementById('dept-date');
+    dateInput.value = `${yyyy}-${mm}-${dd}`;
+    updateWeekday();
+  };
+
+  function updateWeekday() {
+    const dateVal = document.getElementById('dept-date').value;
+    if (!dateVal) return;
+    
+    const days = ['日', '月', '火', '水', '木', '金', '土'];
+    const d = new Date(dateVal);
+    const dayName = days[d.getDay()];
+    
+    document.getElementById('dept-day').value = `(${dayName})`;
+  }
 
   function auth() {
     if (document.getElementById('pass').value === 'gemini0777') {
@@ -71,6 +110,15 @@
     const btn = document.getElementById('gen-btn');
     const status = document.getElementById('status');
     const errBox = document.getElementById('error-msg');
+    
+    // 日時文字列の整形（例: 2026年08月24日(月) 10:30 出発）
+    const rawDate = document.getElementById('dept-date').value; // YYYY-MM-DD
+    const dayStr = document.getElementById('dept-day').value;  // (月)
+    const timeStr = document.getElementById('dept-time').value; // 10:30
+    
+    const [y, m, d] = rawDate.split('-');
+    const formattedDeptTime = `${y}年${m}月${d}日${dayStr} ${timeStr} 出発`;
+
     btn.disabled = true;
     status.innerText = "⏳ AIが資料を解析中...（約15〜30秒）";
     errBox.style.display = "none";
@@ -79,7 +127,11 @@
       const res = await fetch('/api/process', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ file: selectedFileB64, mimeType: selectedMime })
+        body: JSON.stringify({ 
+          file: selectedFileB64, 
+          mimeType: selectedMime,
+          deptTime: formattedDeptTime
+        })
       });
 
       if (!res.ok) {
