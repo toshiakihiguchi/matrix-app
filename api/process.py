@@ -1,6 +1,7 @@
 import os
 import io
 import json
+import re
 import base64
 import urllib.parse
 from http.server import BaseHTTPRequestHandler
@@ -8,6 +9,7 @@ from google import genai
 from google.genai import types
 import openpyxl
 from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
+from openpyxl.utils import get_column_letter
 
 class handler(BaseHTTPRequestHandler):
     def do_POST(self):
@@ -86,16 +88,20 @@ class handler(BaseHTTPRequestHandler):
             
             res_text = response.text.strip()
             
-            if "```json" in res_text:
-                res_text = res_text.split("```json")[1].split("```")[0].strip()
-            elif "```" in res_text:
-                res_text = res_text.split("```")[1].split("```")[0].strip()
+            json_match = re.search(r'\{.*\}', res_text, re.DOTALL)
+            if json_match:
+                clean_json_str = json_match.group(0)
+            else:
+                clean_json_str = res_text
 
-            result_data = json.loads(res_text)
+            result_data = json.loads(clean_json_str)
 
             wb = openpyxl.Workbook()
             header_fill = PatternFill(start_color="1F4E78", end_color="1F4E78", fill_type="solid")
-            header_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+            header_font = Font(name="Meiryo", size=10, bold=True, color="FFFFFF")
+            body_font = Font(name="Meiryo", size=9.5)
+            link_font = Font(name="Meiryo", size=9.5, color="004B91", underline="single")
+            
             thin_border = Border(
                 left=Side(style='thin', color='D9D9D9'),
                 right=Side(style='thin', color='D9D9D9'),
@@ -112,26 +118,44 @@ class handler(BaseHTTPRequestHandler):
                     ws.title = title
                 
                 ws.freeze_panes = 'B5'
-                ws['A1'] = f"出発想定日時：{dept_time}"
-                ws['A1'].font = Font(bold=True, size=12)
                 
+                # タイトル部
+                ws['A1'] = f"■ 出発想定日時：{dept_time}"
+                ws['A1'].font = Font(name="Meiryo", bold=True, size=11, color="1F4E78")
+                ws.row_dimensions[1].height = 24
+                
+                # ヘッダー設置
                 ws['A4'] = "出発地 ＼ 目的地"
                 ws['A4'].fill = header_fill
                 ws['A4'].font = header_font
                 ws['A4'].alignment = center_align
+                ws.row_dimensions[4].height = 40  # ヘッダー行の高さをゆったりに設定
 
                 matrix_data = result_data.get(data_key, [])
                 if matrix_data:
+                    # 1列目（出発地）の幅設定用
+                    max_a_len = 16
+                    
+                    # 横軸ヘッダー
                     for c_idx, col_name in enumerate(matrix_data[0][1:], start=2):
                         cell = ws.cell(row=4, column=c_idx, value=col_name)
                         cell.fill = header_fill
                         cell.font = header_font
                         cell.alignment = center_align
+                        ws.column_dimensions[get_column_letter(c_idx)].width = 16  # データ列の幅を広げる
 
+                    # データ行の追加
                     for r_idx, row_data in enumerate(matrix_data[1:], start=5):
+                        ws.row_dimensions[r_idx].height = 32  # 各行の高さをゆったり広げる
+                        
                         origin_name = row_data[0]
-                        ws.cell(row=r_idx, column=1, value=origin_name).font = Font(bold=True)
-                        ws.cell(row=r_idx, column=1).fill = PatternFill(start_color="F2F2F2", fill_type="solid")
+                        max_a_len = max(max_a_len, len(str(origin_name)))
+                        
+                        a_cell = ws.cell(row=r_idx, column=1, value=origin_name)
+                        a_cell.font = Font(name="Meiryo", size=9.5, bold=True)
+                        a_cell.fill = PatternFill(start_color="F2F5F8", fill_type="solid")
+                        a_cell.alignment = center_align
+                        a_cell.border = thin_border
 
                         for c_idx, val in enumerate(row_data[1:], start=2):
                             dest_name = matrix_data[0][c_idx-1]
@@ -139,36 +163,68 @@ class handler(BaseHTTPRequestHandler):
                             cell.alignment = center_align
                             cell.border = thin_border
 
-                            if origin_name == dest_name or val == "同地点":
+                            if origin_name == dest_name or val == "同地点" or val == "-":
                                 cell.value = "-"
+                                cell.font = body_font
                             else:
-                                cell.value = val
+                                cell.value = str(val)
                                 maps_url = f"https://www.google.com/maps/dir/?api=1&origin={urllib.parse.quote(origin_name)}&destination={urllib.parse.quote(dest_name)}&travelmode={mode_param}"
                                 cell.hyperlink = maps_url
-                                cell.font = Font(color="0000FF", underline="single")
+                                cell.font = link_font
 
+                    # A列（出発地名）の自動幅設定
+                    ws.column_dimensions['A'].width = max(max_a_len * 2.2, 22)
+
+            # 全体マップシートのスタイリング
             ws_map = wb.create_sheet(title="全体マップ")
-            ws_map.append(["No.", "画像上の表記", "特定された正式店舗・施設名", "正式住所", "Googleマップリンク", "利用可能な最寄り駅一覧と所要時間"])
-            for cell in ws_map[1]:
+            ws_map.freeze_panes = 'A2'
+            
+            headers_map = ["No.", "画像上の表記", "特定された正式店舗・施設名", "正式住所", "Googleマップ", "利用可能な最寄り駅一覧と所要時間"]
+            ws_map.append(headers_map)
+            ws_map.row_dimensions[1].height = 28
+            
+            for c_idx, h_text in enumerate(headers_map, start=1):
+                cell = ws_map.cell(row=1, column=c_idx)
                 cell.fill = header_fill
                 cell.font = header_font
                 cell.alignment = center_align
 
+            col_widths = [6, 18, 26, 38, 16, 35]
+
             for loc in result_data.get("locations", []):
                 official = loc.get("official_name", "")
                 map_url = f"https://www.google.com/maps/search/?api=1&query={urllib.parse.quote(official)}"
+                
                 row_cells = [
                     loc.get("no"),
                     loc.get("raw_name"),
                     official,
                     loc.get("address"),
-                    map_url,
+                    "マップを開く",  # URL直貼りではなくスッキリした文字にリンクを設定
                     loc.get("stations")
                 ]
                 ws_map.append(row_cells)
                 last_row = ws_map.max_row
-                ws_map.cell(row=last_row, column=5).hyperlink = map_url
-                ws_map.cell(row=last_row, column=5).font = Font(color="0000FF", underline="single")
+                ws_map.row_dimensions[last_row].height = 26
+                
+                for c_idx in range(1, 7):
+                    cell = ws_map.cell(row=last_row, column=c_idx)
+                    cell.border = thin_border
+                    cell.font = body_font
+                    
+                    if c_idx in [1, 5]:
+                        cell.alignment = Alignment(horizontal='center', vertical='center')
+                    else:
+                        cell.alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
+
+                # Googleマップリンクの設定
+                map_cell = ws_map.cell(row=last_row, column=5)
+                map_cell.hyperlink = map_url
+                map_cell.font = link_font
+
+            # 全体マップの各列幅を適用
+            for idx, width in enumerate(col_widths, start=1):
+                ws_map.column_dimensions[get_column_letter(idx)].width = width
 
             excel_buffer = io.BytesIO()
             wb.save(excel_buffer)
