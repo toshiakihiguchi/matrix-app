@@ -1,2 +1,3 @@
 google-genai
 openpyxl
+reportlab
