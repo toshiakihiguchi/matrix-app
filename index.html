@@ -5,82 +5,110 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ROUTE MATRIX AI Pro</title>
   <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f0f2f5; display: flex; justify-content: center; padding: 20px; }
-    .card { background: white; border-radius: 16px; padding: 24px; max-width: 480px; width: 100%; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
-    h2 { font-size: 20px; margin-top: 0; text-align: center; color: #1a1a1a; }
-    .btn { width: 100%; padding: 14px; border: none; border-radius: 10px; font-weight: bold; cursor: pointer; font-size: 15px; margin-top: 16px; }
-    .btn-main { background: #0f172a; color: white; }
-    .btn-main:disabled { background: #94a3b8; }
-    .input-box { width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px; margin-top: 6px; box-sizing: border-box; font-size: 14px; }
-    .file-select { border: 2px dashed #3b82f6; background: #eff6ff; padding: 20px; text-align: center; border-radius: 12px; cursor: pointer; margin-top: 12px; }
-    .label { font-size: 13px; font-weight: bold; color: #334155; margin-top: 14px; display: block; }
-    .date-container { display: flex; gap: 8px; align-items: center; }
-    .date-input { flex: 2; }
-    .day-display { flex: 1; background: #e2e8f0; text-align: center; font-weight: bold; color: #1e293b; cursor: not-allowed; }
-    #error-msg { color: #dc2626; font-size: 13px; margin-top: 10px; word-break: break-all; white-space: pre-wrap; background: #fef2f2; padding: 10px; border-radius: 8px; display: none; }
+    * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { background-color: #f4f6f9; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; padding: 20px; }
+    .card { background: #ffffff; padding: 24px; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.08); width: 100%; max-width: 480px; text-align: center; }
+    h2 { font-size: 20px; margin-top: 0; margin-bottom: 20px; color: #111827; }
+    .label { font-size: 13px; font-weight: bold; color: #374151; margin-top: 16px; margin-bottom: 6px; text-align: left; display: block; }
+    
+    .btn-group { display: flex; gap: 10px; margin-top: 8px; margin-bottom: 8px; }
+    .action-btn { flex: 1; padding: 12px; border-radius: 10px; border: 1.5px dashed #3b82f6; background-color: #eff6ff; color: #1d4ed8; font-weight: bold; font-size: 13px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; }
+    .action-btn:hover { background-color: #dbeafe; }
+    
+    .preview-container { margin: 12px 0; padding: 12px; border: 1px solid #e5e7eb; border-radius: 12px; background: #fafafa; display: none; }
+    .preview-img { max-width: 100%; max-height: 180px; border-radius: 8px; margin-bottom: 10px; object-fit: contain; }
+    .confirm-title { font-size: 12px; font-weight: bold; color: #1f2937; margin-bottom: 8px; }
+    .confirm-btns { display: flex; gap: 8px; justify-content: center; }
+    .confirm-btn { padding: 6px 12px; border-radius: 6px; border: none; font-size: 12px; font-weight: bold; cursor: pointer; }
+    .btn-ok { background-color: #10b981; color: white; }
+    .btn-retry { background-color: #ef4444; color: white; }
+
+    .file-status { font-size: 12px; color: #4b5563; margin-top: 4px; word-break: break-all; }
+    .date-row { display: flex; gap: 8px; align-items: center; }
+    .input-box { width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #d1d5db; font-size: 14px; outline: none; }
+    .weekday-box { width: 70px; padding: 10px; border-radius: 8px; border: 1px solid #d1d5db; background: #e2e8f0; font-weight: bold; text-align: center; font-size: 14px; color: #1e293b; }
+    .btn { width: 100%; padding: 14px; margin-top: 18px; border-radius: 10px; border: none; font-weight: bold; font-size: 14px; cursor: pointer; }
+    .btn-main { background-color: #0f172a; color: white; }
+    .btn-main:disabled { background-color: #94a3b8; cursor: not-allowed; }
+    #error-msg { margin-top: 12px; padding: 10px; border-radius: 8px; background: #fef2f2; border: 1px solid #fecaca; color: #dc2626; font-size: 11px; text-align: left; white-space: pre-wrap; word-break: break-all; display: none; }
   </style>
 </head>
 <body>
+
 <div class="card">
   <h2>🧭 ROUTE MATRIX AI Pro</h2>
-  
+
+  <!-- パスワード認証エリア -->
   <div id="auth-section">
-    <p style="font-size:14px; color:#64748b; text-align:center;">システムパスワードを入力してください</p>
+    <p style="font-size:14px; color:#64748b; margin-bottom: 12px;">システムパスワードを入力してください</p>
     <input type="password" id="pass" class="input-box" placeholder="パスワード">
     <button class="btn btn-main" onclick="auth()">認証して開始</button>
   </div>
 
+  <!-- アプリ本体エリア -->
   <div id="app-section" style="display:none;">
-    <div class="file-select" onclick="document.getElementById('file-input').click()">
-      📷/📁 資料読み込み（画像・PDF）
-      <input type="file" id="file-input" style="display:none" accept="image/*,application/pdf" onchange="fileSelected(this)">
-      <div id="file-name" style="font-size:12px; color:#475569; margin-top:6px;">選択されていません</div>
+    
+    <span class="label">📸 資料読み込み</span>
+    <div class="btn-group">
+      <button type="button" class="action-btn" onclick="document.getElementById('cameraInput').click()">📷 カメラ起動</button>
+      <button type="button" class="action-btn" onclick="document.getElementById('fileInput').click()">📁 ファイル選択</button>
     </div>
 
-    <!-- 出発条件設定エリア -->
+    <!-- 非表示ファイルタグ -->
+    <input type="file" id="cameraInput" accept="image/*" capture="environment" style="display:none;" onchange="handleFileSelect(this)">
+    <input type="file" id="fileInput" accept="image/*,.pdf" style="display:none;" onchange="handleFileSelect(this)">
+
+    <!-- 撮影後プレビュー＆確認ボタン -->
+    <div id="previewContainer" class="preview-container">
+      <img id="previewImg" class="preview-img" src="" alt="プレビュー">
+      <div class="confirm-title">こちらの画像・資料でよろしいですか？</div>
+      <div class="confirm-btns">
+        <button type="button" class="confirm-btn btn-ok" onclick="confirmUse()">✅ この資料を使用</button>
+        <button type="button" class="confirm-btn btn-retry" onclick="reSelect()">📷 撮り直す</button>
+      </div>
+    </div>
+
+    <div id="fileStatus" class="file-status">選択されていません</div>
+
+    <!-- 出発日付 -->
     <span class="label">⏰ 出発日付の設定</span>
-    <div class="date-container">
-      <input type="date" id="dept-date" class="input-box date-input" onchange="updateWeekday()">
-      <input type="text" id="dept-day" class="input-box day-display" readonly placeholder="(曜日)">
+    <div class="date-row">
+      <input type="date" id="dept-date" class="input-box" onchange="updateWeekday()">
+      <input type="text" id="dept-day" class="weekday-box" readonly placeholder="(曜日)">
     </div>
 
+    <!-- 出発時刻 -->
     <span class="label">🕒 出発時刻の設定</span>
     <input type="time" id="dept-time" class="input-box" value="10:30">
 
+    <!-- 生成ボタン -->
     <button id="gen-btn" class="btn btn-main" onclick="generate()" disabled>⚡ 移動マトリックスExcelを自動生成</button>
-    
-    <div id="status" style="text-align:center; margin-top:12px; font-size:13px; color:#0284c7;"></div>
+
+    <div id="status" style="text-align:center; margin-top:12px; font-size:13px; color:#0284c7; font-weight:bold;"></div>
     <div id="error-msg"></div>
   </div>
 </div>
 
 <script>
-  let selectedFileB64 = "";
-  let selectedMime = "";
+  let selectedFile = null;
 
-  // 初期化：翌日の日付を自動セット＆曜日計算
   window.onload = function() {
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
-    
     const yyyy = tomorrow.getFullYear();
     const mm = String(tomorrow.getMonth() + 1).padStart(2, '0');
     const dd = String(tomorrow.getDate()).padStart(2, '0');
     
-    const dateInput = document.getElementById('dept-date');
-    dateInput.value = `${yyyy}-${mm}-${dd}`;
+    document.getElementById('dept-date').value = `${yyyy}-${mm}-${dd}`;
     updateWeekday();
   };
 
   function updateWeekday() {
     const dateVal = document.getElementById('dept-date').value;
     if (!dateVal) return;
-    
     const days = ['日', '月', '火', '水', '木', '金', '土'];
     const d = new Date(dateVal);
-    const dayName = days[d.getDay()];
-    
-    document.getElementById('dept-day').value = `(${dayName})`;
+    document.getElementById('dept-day').value = `(${days[d.getDay()]})`;
   }
 
   function auth() {
@@ -92,69 +120,102 @@
     }
   }
 
-  function fileSelected(input) {
-    const file = input.files[0];
-    if (!file) return;
-    document.getElementById('file-name').innerText = "選択中: " + file.name;
-    selectedMime = file.type || "image/png";
+  function handleFileSelect(input) {
+    if (input.files && input.files[0]) {
+      selectedFile = input.files[0];
+      const statusDiv = document.getElementById('fileStatus');
+      const previewContainer = document.getElementById('previewContainer');
+      const previewImg = document.getElementById('previewImg');
 
-    const reader = new FileReader();
-    reader.onload = function(e) {
-      selectedFileB64 = e.target.result.split(',')[1];
+      statusDiv.innerHTML = `選択中: <b>${selectedFile.name}</b>`;
       document.getElementById('gen-btn').disabled = false;
-    };
-    reader.readAsDataURL(file);
+
+      if (selectedFile.type.startsWith('image/')) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          previewImg.src = e.target.result;
+          previewContainer.style.display = 'block';
+        };
+        reader.readAsDataURL(selectedFile);
+      } else {
+        previewContainer.style.display = 'none';
+      }
+    }
+  }
+
+  function confirmUse() {
+    alert("資料を確定しました。「自動生成」ボタンを押してください。");
+  }
+
+  function reSelect() {
+    selectedFile = null;
+    document.getElementById('cameraInput').value = "";
+    document.getElementById('fileInput').value = "";
+    document.getElementById('fileStatus').innerHTML = "選択されていません";
+    document.getElementById('previewContainer').style.display = "none";
+    document.getElementById('gen-btn').disabled = true;
+    document.getElementById('cameraInput').click();
   }
 
   async function generate() {
+    if (!selectedFile) {
+      alert("資料を選択または撮影してください。");
+      return;
+    }
+
     const btn = document.getElementById('gen-btn');
     const status = document.getElementById('status');
     const errBox = document.getElementById('error-msg');
     
-    // 日時文字列の整形（例: 2026年08月24日(月) 10:30 出発）
-    const rawDate = document.getElementById('dept-date').value; // YYYY-MM-DD
-    const dayStr = document.getElementById('dept-day').value;  // (月)
-    const timeStr = document.getElementById('dept-time').value; // 10:30
+    const rawDate = document.getElementById('dept-date').value;
+    const dayStr = document.getElementById('dept-day').value;
+    const timeStr = document.getElementById('dept-time').value;
     
     const [y, m, d] = rawDate.split('-');
     const formattedDeptTime = `${y}年${m}月${d}日${dayStr} ${timeStr} 出発`;
 
     btn.disabled = true;
-    status.innerText = "⏳ AIが資料を解析中...（約15〜30秒）";
+    status.innerText = "⏳ AI解析 & 移動データ計算中...";
     errBox.style.display = "none";
 
-    try {
-      const res = await fetch('/api/process', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          file: selectedFileB64, 
-          mimeType: selectedMime,
-          deptTime: formattedDeptTime
-        })
-      });
+    const reader = new FileReader();
+    reader.readAsDataURL(selectedFile);
+    reader.onload = async function() {
+      const base64Data = reader.result.split(',')[1];
 
-      if (!res.ok) {
-        const errText = await res.text();
-        throw new Error(`サーバーエラー (${res.status}): ${errText}`);
+      try {
+        const res = await fetch('/api/process', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            file: base64Data, 
+            mimeType: selectedFile.type || "image/png",
+            deptTime: formattedDeptTime
+          })
+        });
+
+        if (!res.ok) {
+          const errText = await res.text();
+          throw new Error(`サーバーエラー (${res.status}): ${errText}`);
+        }
+
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = "移動所要時間マトリックス.xlsx";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        status.innerText = "✅ ダウンロードが完了しました！";
+      } catch (err) {
+        status.innerText = "";
+        errBox.innerText = err.message;
+        errBox.style.display = "block";
+      } finally {
+        btn.disabled = false;
       }
-
-      const blob = await res.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = "移動所要時間マトリックス.xlsx";
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      status.innerText = "✅ ダウンロードが完了しました！";
-    } catch (err) {
-      status.innerText = "";
-      errBox.innerText = err.message;
-      errBox.style.display = "block";
-    } finally {
-      btn.disabled = false;
-    }
+    };
   }
 </script>
 </body>
