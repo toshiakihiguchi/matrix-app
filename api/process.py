@@ -22,6 +22,15 @@ from reportlab.pdfbase.cidfonts import UnicodeCIDFont
 # 日本語フォント登録（HeiseiKakuGo-W5）
 pdfmetrics.registerFont(UnicodeCIDFont('HeiseiKakuGo-W5'))
 
+def get_filename_prefix(dept_time_str):
+    """'2026年08月24日(月)...' から '0824' などの4桁日付文字列を抽出"""
+    m = re.search(r'(\d{1,2})月(\d{1,2})日', dept_time_str)
+    if m:
+        month = m.group(1).zfill(2)
+        day = m.group(2).zfill(2)
+        return f"{month}{day}"
+    return "0000"
+
 class handler(BaseHTTPRequestHandler):
     def do_POST(self):
         try:
@@ -31,6 +40,9 @@ class handler(BaseHTTPRequestHandler):
 
             action = data.get("action", "all")
             dept_time = data.get("deptTime", "明日の 10:30 出発")
+            
+            # 4桁日付の動的生成（例: 0824）
+            date_prefix = get_filename_prefix(dept_time)
 
             # -------------------------------------------------------------
             # STEP 1: AI解析リクエスト (action == 'parse' または 旧構成 'all')
@@ -164,13 +176,11 @@ class handler(BaseHTTPRequestHandler):
                     matrix = result_data.get(data_key, [])
                     if matrix:
                         table_data = []
-                        # ヘッダー行
                         header_row = [Paragraph("出発地 ＼ 目的地", header_style)]
                         for col_name in matrix[0][1:]:
                             header_row.append(Paragraph(col_name, header_style))
                         table_data.append(header_row)
 
-                        # データ行
                         for r_data in matrix[1:]:
                             origin_name = r_data[0]
                             row_cells = [Paragraph(f"<b>{origin_name}</b>", ParagraphStyle('JPOrigin', fontName='HeiseiKakuGo-W5', fontSize=8, leading=10, alignment=1))]
@@ -230,9 +240,12 @@ class handler(BaseHTTPRequestHandler):
                 doc.build(elements)
                 pdf_data = pdf_buffer.getvalue()
 
+                filename_pdf = f"{date_prefix}移動所要時間マトリックス.pdf"
+                encoded_pdf_filename = urllib.parse.quote(filename_pdf)
+
                 self.send_response(200)
                 self.send_header('Content-Type', 'application/pdf')
-                self.send_header('Content-Disposition', 'attachment; filename="matrix.pdf"')
+                self.send_header('Content-Disposition', f"attachment; filename*=UTF-8''{encoded_pdf_filename}")
                 self.end_headers()
                 self.wfile.write(pdf_data)
                 return
@@ -361,9 +374,12 @@ class handler(BaseHTTPRequestHandler):
             wb.save(excel_buffer)
             excel_data = excel_buffer.getvalue()
 
+            filename_excel = f"{date_prefix}移動所要時間マトリックス.xlsx"
+            encoded_excel_filename = urllib.parse.quote(filename_excel)
+
             self.send_response(200)
             self.send_header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-            self.send_header('Content-Disposition', 'attachment; filename="matrix.xlsx"')
+            self.send_header('Content-Disposition', f"attachment; filename*=UTF-8''{encoded_excel_filename}")
             self.end_headers()
             self.wfile.write(excel_data)
 
