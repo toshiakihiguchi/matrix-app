@@ -5,6 +5,7 @@ import base64
 import urllib.parse
 from http.server import BaseHTTPRequestHandler
 from google import genai
+from google.genai import types
 import openpyxl
 from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
 
@@ -28,7 +29,6 @@ class handler(BaseHTTPRequestHandler):
                 self.send_error(500, "Vercelの環境変数 GEMINI_API_KEY が設定されていません。")
                 return
 
-            # 最新SDKクライアントの初期化
             client = genai.Client(api_key=api_key)
 
             prompt = (
@@ -77,13 +77,11 @@ class handler(BaseHTTPRequestHandler):
             )
 
             file_bytes = base64.b64decode(file_b64)
+            file_part = types.Part.from_bytes(data=file_bytes, mime_type=mime_type)
             
             response = client.models.generate_content(
                 model='gemini-2.5-flash',
-                contents=[
-                    prompt,
-                    {"mime_type": mime_type, "data": file_bytes}
-                ]
+                contents=[prompt, file_part]
             )
             
             res_text = response.text.strip()
