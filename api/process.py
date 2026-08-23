@@ -4,7 +4,7 @@ import json
 import base64
 import urllib.parse
 from http.server import BaseHTTPRequestHandler
-import google.generativeai as genai
+from google import genai
 import openpyxl
 from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
 
@@ -28,9 +28,8 @@ class handler(BaseHTTPRequestHandler):
                 self.send_error(500, "Vercelの環境変数 GEMINI_API_KEY が設定されていません。")
                 return
 
-            genai.configure(api_key=api_key)
-            # v1beta互換・動的最新エイリアスを指定
-            model = genai.GenerativeModel('gemini-1.5-flash-latest')
+            # 最新SDKクライアントの初期化
+            client = genai.Client(api_key=api_key)
 
             prompt = (
                 "添付資料（画像またはPDF）に記載されている全ての施設名・店舗名・住所・駅名を読み取り、"
@@ -78,9 +77,15 @@ class handler(BaseHTTPRequestHandler):
             )
 
             file_bytes = base64.b64decode(file_b64)
-            part = {"mime_type": mime_type, "data": file_bytes}
             
-            response = model.generate_content([prompt, part])
+            response = client.models.generate_content(
+                model='gemini-2.5-flash',
+                contents=[
+                    prompt,
+                    {"mime_type": mime_type, "data": file_bytes}
+                ]
+            )
+            
             res_text = response.text.strip()
             
             if "```json" in res_text:
