@@ -114,6 +114,7 @@
   let selectedFile = null;
   let parsedResultData = null; // AI解析結果を画面側で保持
   let currentDeptTimeStr = "";
+  let datePrefix = "0000"; // 4桁日付用 (例: 0824)
 
   window.onload = function() {
     const tomorrow = new Date();
@@ -194,12 +195,13 @@
     const errBox = document.getElementById('error-msg');
     const downloadArea = document.getElementById('downloadArea');
     
-    const rawDate = document.getElementById('dept-date').value;
+    const rawDate = document.getElementById('dept-date').value; // YYYY-MM-DD
     const dayStr = document.getElementById('dept-day').value;
     const timeStr = document.getElementById('dept-time').value;
     
     const [y, m, d] = rawDate.split('-');
     currentDeptTimeStr = `${y}年${m}月${d}日${dayStr} ${timeStr} 出発`;
+    datePrefix = `${m}${d}`; // 4桁日付 (例: 0824)
 
     btn.disabled = true;
     status.innerText = "⏳ AI解析 & 移動データ計算中...";
@@ -219,7 +221,7 @@
             file: base64Data, 
             mimeType: selectedFile.type || "image/png",
             deptTime: currentDeptTimeStr,
-            action: "parse" // まずAI解析データのみを取得
+            action: "parse"
           })
         });
 
@@ -230,7 +232,7 @@
 
         parsedResultData = await res.json();
         status.innerText = "✅ 移動データの計算が完了しました！";
-        downloadArea.style.display = "block"; // 切替ダウンロードエリアを表示
+        downloadArea.style.display = "block";
       } catch (err) {
         status.innerText = "";
         errBox.innerText = err.message;
@@ -268,7 +270,11 @@
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = format === 'excel' ? "移動所要時間マトリックス.xlsx" : "移動所要時間マトリックス.pdf";
+      
+      // 動的なファイル名設定 (例: 0824移動所要時間マトリックス.xlsx)
+      const ext = format === 'excel' ? 'xlsx' : 'pdf';
+      a.download = `${datePrefix}移動所要時間マトリックス.${ext}`;
+      
       document.body.appendChild(a);
       a.click();
       a.remove();
