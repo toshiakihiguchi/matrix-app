@@ -99,7 +99,7 @@ class handler(BaseHTTPRequestHandler):
                 file_part = types.Part.from_bytes(data=file_bytes, mime_type=mime_type)
                 
                 response = client.models.generate_content(
-                    model='gemini-2.5-flash',
+                    model='gemini-3.6-flash',
                     contents=[prompt, file_part]
                 )
                 
