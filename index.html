@@ -30,6 +30,17 @@
     .btn { width: 100%; padding: 14px; margin-top: 18px; border-radius: 10px; border: none; font-weight: bold; font-size: 14px; cursor: pointer; }
     .btn-main { background-color: #0f172a; color: white; }
     .btn-main:disabled { background-color: #94a3b8; cursor: not-allowed; }
+
+    /* 出力切替エリア */
+    .download-area { margin-top: 20px; padding: 16px; border-radius: 12px; background-color: #f0fdf4; border: 1px solid #bbf7d0; display: none; }
+    .download-title { font-size: 13px; font-weight: bold; color: #166534; margin-bottom: 12px; }
+    .dl-btn-group { display: flex; gap: 10px; }
+    .btn-dl { flex: 1; padding: 12px; border-radius: 8px; border: none; font-weight: bold; font-size: 13px; cursor: pointer; color: white; }
+    .btn-excel { background-color: #15803d; }
+    .btn-excel:hover { background-color: #166534; }
+    .btn-pdf { background-color: #b91c1c; }
+    .btn-pdf:hover { background-color: #991b1b; }
+
     #error-msg { margin-top: 12px; padding: 10px; border-radius: 8px; background: #fef2f2; border: 1px solid #fecaca; color: #dc2626; font-size: 11px; text-align: left; white-space: pre-wrap; word-break: break-all; display: none; }
   </style>
 </head>
@@ -81,16 +92,28 @@
     <span class="label">🕒 出発時刻の設定</span>
     <input type="time" id="dept-time" class="input-box" value="10:30">
 
-    <!-- 生成ボタン -->
-    <button id="gen-btn" class="btn btn-main" onclick="generate()" disabled>⚡ 移動マトリックスExcelを自動生成</button>
+    <!-- 解析生成ボタン -->
+    <button id="gen-btn" class="btn btn-main" onclick="generate()" disabled>⚡ 移動マトリックスを自動生成</button>
 
     <div id="status" style="text-align:center; margin-top:12px; font-size:13px; color:#0284c7; font-weight:bold;"></div>
+    
+    <!-- ファイルダウンロード切替エリア -->
+    <div id="downloadArea" class="download-area">
+      <div class="download-title">🎉 解析完了！形式を選んで保存できます</div>
+      <div class="dl-btn-group">
+        <button class="btn-dl btn-excel" onclick="downloadFile('excel')">📥 Excel (.xlsx)</button>
+        <button class="btn-dl btn-pdf" onclick="downloadFile('pdf')">📄 PDF (.pdf)</button>
+      </div>
+    </div>
+
     <div id="error-msg"></div>
   </div>
 </div>
 
 <script>
   let selectedFile = null;
+  let parsedResultData = null; // AI解析結果を画面側で保持
+  let currentDeptTimeStr = "";
 
   window.onload = function() {
     const tomorrow = new Date();
@@ -129,6 +152,7 @@
 
       statusDiv.innerHTML = `選択中: <b>${selectedFile.name}</b>`;
       document.getElementById('gen-btn').disabled = false;
+      document.getElementById('downloadArea').style.display = "none";
 
       if (selectedFile.type.startsWith('image/')) {
         const reader = new FileReader();
@@ -149,10 +173,12 @@
 
   function reSelect() {
     selectedFile = null;
+    parsedResultData = null;
     document.getElementById('cameraInput').value = "";
     document.getElementById('fileInput').value = "";
     document.getElementById('fileStatus').innerHTML = "選択されていません";
     document.getElementById('previewContainer').style.display = "none";
+    document.getElementById('downloadArea').style.display = "none";
     document.getElementById('gen-btn').disabled = true;
     document.getElementById('cameraInput').click();
   }
@@ -166,17 +192,19 @@
     const btn = document.getElementById('gen-btn');
     const status = document.getElementById('status');
     const errBox = document.getElementById('error-msg');
+    const downloadArea = document.getElementById('downloadArea');
     
     const rawDate = document.getElementById('dept-date').value;
     const dayStr = document.getElementById('dept-day').value;
     const timeStr = document.getElementById('dept-time').value;
     
     const [y, m, d] = rawDate.split('-');
-    const formattedDeptTime = `${y}年${m}月${d}日${dayStr} ${timeStr} 出発`;
+    currentDeptTimeStr = `${y}年${m}月${d}日${dayStr} ${timeStr} 出発`;
 
     btn.disabled = true;
     status.innerText = "⏳ AI解析 & 移動データ計算中...";
     errBox.style.display = "none";
+    downloadArea.style.display = "none";
 
     const reader = new FileReader();
     reader.readAsDataURL(selectedFile);
@@ -190,7 +218,8 @@
           body: JSON.stringify({ 
             file: base64Data, 
             mimeType: selectedFile.type || "image/png",
-            deptTime: formattedDeptTime
+            deptTime: currentDeptTimeStr,
+            action: "parse" // まずAI解析データのみを取得
           })
         });
 
@@ -199,15 +228,9 @@
           throw new Error(`サーバーエラー (${res.status}): ${errText}`);
         }
 
-        const blob = await res.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = "移動所要時間マトリックス.xlsx";
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        status.innerText = "✅ ダウンロードが完了しました！";
+        parsedResultData = await res.json();
+        status.innerText = "✅ 移動データの計算が完了しました！";
+        downloadArea.style.display = "block"; // 切替ダウンロードエリアを表示
       } catch (err) {
         status.innerText = "";
         errBox.innerText = err.message;
@@ -216,6 +239,44 @@
         btn.disabled = false;
       }
     };
+  }
+
+  async function downloadFile(format) {
+    if (!parsedResultData) return;
+
+    const status = document.getElementById('status');
+    status.innerText = `⏳ ${format.toUpperCase()} ファイルを作成中...`;
+
+    try {
+      const res = await fetch('/api/process', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: "export",
+          format: format, // "excel" または "pdf"
+          resultData: parsedResultData,
+          deptTime: currentDeptTimeStr
+        })
+      });
+
+      if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(`出力エラー (${res.status}): ${errText}`);
+      }
+
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = format === 'excel' ? "移動所要時間マトリックス.xlsx" : "移動所要時間マトリックス.pdf";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      status.innerText = `✅ ${format.toUpperCase()} のダウンロードが完了しました！`;
+    } catch (err) {
+      alert(err.message);
+      status.innerText = "";
+    }
   }
 </script>
 </body>
