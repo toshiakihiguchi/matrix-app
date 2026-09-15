@@ -88,7 +88,9 @@ class handler(BaseHTTPRequestHandler):
             dept_time = data.get("deptTime", "明日の 10:30 出発")
             date_prefix = get_filename_prefix(dept_time)
 
+            # -------------------------------------------------------------
             # STEP 1: AI解析リクエスト
+            # -------------------------------------------------------------
             if action in ["parse", "all"]:
                 file_b64 = data.get("file")
                 mime_type = data.get("mimeType", "image/png")
@@ -186,14 +188,18 @@ class handler(BaseHTTPRequestHandler):
                     self.wfile.write(json.dumps(result_data, ensure_ascii=False).encode('utf-8'))
                     return
 
+            # -------------------------------------------------------------
             # STEP 2: ファイル出力処理
+            # -------------------------------------------------------------
             if action == "export":
                 result_data = data.get("resultData", {})
                 output_format = data.get("format", "excel")
             else:
                 output_format = "excel"
 
-            # PDF出力
+            # ==========================================
+            # A. PDF出力処理 (ReportLab)
+            # ==========================================
             if output_format == "pdf":
                 pdf_buffer = io.BytesIO()
                 doc = SimpleDocTemplate(
@@ -306,7 +312,9 @@ class handler(BaseHTTPRequestHandler):
                 self.wfile.write(pdf_data)
                 return
 
-            # Excel出力処理
+            # ==========================================
+            # B. Excel出力処理 (openpyxl) - 通常の .xlsx
+            # ==========================================
             wb = openpyxl.Workbook()
             header_fill = PatternFill(start_color="1F4E78", end_color="1F4E78", fill_type="solid")
             header_font = Font(name="Meiryo", size=10, bold=True, color="FFFFFF")
@@ -486,79 +494,15 @@ class handler(BaseHTTPRequestHandler):
             for idx, width in enumerate(col_widths, start=1):
                 ws_map.column_dimensions[get_column_letter(idx)].width = width
 
-            # VBAモジュールの埋め込み（.xlsm 形式へ切り替え）
-            wb.code_name = "ThisWorkbook"
-            vba_code = """
-Sub UpdateMapLinks()
-    Dim wsMap As Worksheet, wsMode As Worksheet
-    Dim lastRow As Long, i As Long, r As Long, c As Long
-    Dim dict As Object
-    Set dict = CreateObject("Scripting.Dictionary")
-    
-    On Error Resume Next
-    Set wsMap = ThisWorkbook.Sheets("全体マップ")
-    If wsMap Is Nothing Then Exit Sub
-    
-    lastRow = wsMap.Cells(wsMap.Rows.Count, 3).End(xlUp).Row
-    For i = 2 To lastRow
-        Dim nameKey As String, addressVal As String
-        nameKey = Trim(wsMap.Cells(i, 3).Value)
-        addressVal = Trim(wsMap.Cells(i, 4).Value)
-        If nameKey <> "" Then
-            dict(nameKey) = addressVal
-            wsMap.Hyperlinks.Add Anchor:=wsMap.Cells(i, 5), _
-                Address:="https://www.google.com/maps/search/?api=1&query=" & WorksheetFunction.EncodeURL(nameKey & " " & addressVal), _
-                TextToDisplay:="マップを開く"
-        End If
-    Next i
-    
-    Dim modeSheets As Variant, modeParams As Variant, mIdx As Long
-    modeSheets = Array("公共交通機関", "車利用", "徒歩利用")
-    modeParams = Array("transit", "driving", "walking")
-    
-    For mIdx = LBound(modeSheets) To UBound(modeSheets)
-        Set wsMode = ThisWorkbook.Sheets(modeSheets(mIdx))
-        If Not wsMode Is Nothing Then
-            Dim maxR As Long, maxC As Long
-            maxR = wsMode.Cells(wsMode.Rows.Count, 1).End(xlUp).Row
-            maxC = wsMode.Cells(4, wsMode.Columns.Count).End(xlToLeft).Column
-            
-            For r = 5 To maxR
-                For c = 2 To maxC
-                    Dim origName As String, destName As String
-                    origName = Trim(wsMode.Cells(r, 1).Value)
-                    destName = Trim(wsMode.Cells(4, c).Value)
-                    
-                    If origName <> "" And destName <> "" And origName <> destName Then
-                        Dim origAddr As String, destAddr As String
-                        origAddr = IIf(dict.Exists(origName), dict(origName), origName)
-                        destAddr = IIf(dict.Exists(destName), dict(destName), destName)
-                        
-                        Dim cellVal As String
-                        cellVal = wsMode.Cells(r, c).Value
-                        If cellVal <> "-" And cellVal <> "" Then
-                            wsMode.Hyperlinks.Add Anchor:=wsMode.Cells(r, c), _
-                                Address:="https://www.google.com/maps/dir/?api=1&origin=" & WorksheetFunction.EncodeURL(origAddr) & "&destination=" & WorksheetFunction.EncodeURL(destAddr) & "&travelmode=" & modeParams(mIdx), _
-                                TextToDisplay:=cellVal
-                        End If
-                    End If
-                Next c
-            Next r
-        End If
-    Next mIdx
-    
-    MsgBox "住所修正に伴うGoogle Mapsルートリンクを全更新しました！", vbInformation, "更新完了"
-End Sub
-"""
             excel_buffer = io.BytesIO()
             wb.save(excel_buffer)
             excel_data = excel_buffer.getvalue()
 
-            filename_excel = f"{date_prefix}移動所要時間マトリックス.xlsm"
+            filename_excel = f"{date_prefix}移動所要時間マトリックス.xlsx"
             encoded_excel_filename = urllib.parse.quote(filename_excel)
 
             self.send_response(200)
-            self.send_header('Content-Type', 'application/vnd.ms-excel.sheet.macroEnabled.12')
+            self.send_header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
             self.send_header('Content-Disposition', f"attachment; filename*=UTF-8''{encoded_excel_filename}")
             self.end_headers()
             self.wfile.write(excel_data)
