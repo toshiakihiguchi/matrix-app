@@ -32,19 +32,29 @@ def get_filename_prefix(dept_time_str):
     return "0000"
 
 def parse_minutes(text):
-    """文字列から所要時間（分）の数字を抽出"""
+    """'1時間20分 (5.2km)' や '25分 (1.5km)' から正確な合計所要時間（分）を算出"""
     if not text:
         return 0
-    m = re.search(r'(\d+)\s*分', str(text))
-    if m:
-        return int(m.group(1))
-    # 時間表記（例：1時間20分）対応
-    m_h = re.search(r'(\d+)\s*時間(?:\s*(\d+)\s*分)?', str(text))
-    if m_h:
-        hours = int(m_h.group(1))
-        mins = int(m_h.group(2)) if m_h.group(2) else 0
-        return hours * 60 + mins
-    return 0
+    
+    # km部分などを除去して時間関連のテキストを優先判定
+    s = str(text)
+    
+    m_hour = re.search(r'(\d+)\s*時間', s)
+    m_min = re.search(r'(\d+)\s*分', s)
+    
+    total_mins = 0
+    if m_hour:
+        total_mins += int(m_hour.group(1)) * 60
+    if m_min:
+        total_mins += int(m_min.group(1))
+        
+    # 「時間」も「分」も入っていない場合のフォールバック（最初の数字を取得）
+    if not m_hour and not m_min:
+        m_num = re.search(r'(\d+)', s)
+        if m_num:
+            total_mins = int(m_num.group(1))
+            
+    return total_mins
 
 def get_color_code(mode, minutes):
     """モードと所要時間（分）から 'blue' / 'yellow' / 'red' を判定"""
@@ -221,8 +231,8 @@ class handler(BaseHTTPRequestHandler):
                 )
 
                 pdf_color_map = {
-                    "blue": "#0000FF",
-                    "yellow": "#B8860B", # 視認性の高い暗めゴールド/イエロー
+                    "blue": "#004B91",
+                    "yellow": "#D97706",
                     "red": "#DC2626"
                 }
 
@@ -334,20 +344,11 @@ class handler(BaseHTTPRequestHandler):
             header_font = Font(name="Meiryo", size=10, bold=True, color="FFFFFF")
             body_font = Font(name="Meiryo", size=9.5)
             
-            # Excel用 パステルカラー指定（ソフトで見やすい配色）
-            excel_color_styles = {
-                "blue": {
-                    "fill": PatternFill(start_color="E6F0FA", fill_type="solid"),
-                    "font": Font(name="Meiryo", size=9.5, color="1E40AF", underline="single", bold=True)
-                },
-                "yellow": {
-                    "fill": PatternFill(start_color="FEF9C3", fill_type="solid"),
-                    "font": Font(name="Meiryo", size=9.5, color="854D0E", underline="single", bold=True)
-                },
-                "red": {
-                    "fill": PatternFill(start_color="FEE2E2", fill_type="solid"),
-                    "font": Font(name="Meiryo", size=9.5, color="991B1B", underline="single", bold=True)
-                }
+            # Excel用 文字色のみの設定（背景色は塗りつぶさず標準の白のまま）
+            excel_font_styles = {
+                "blue": Font(name="Meiryo", size=9.5, color="004B91", underline="single", bold=True),
+                "yellow": Font(name="Meiryo", size=9.5, color="D97706", underline="single", bold=True),
+                "red": Font(name="Meiryo", size=9.5, color="DC2626", underline="single", bold=True)
             }
             
             thin_border = Border(
@@ -411,11 +412,10 @@ class handler(BaseHTTPRequestHandler):
                                 maps_url = f"https://www.google.com/maps/dir/?api=1&origin={urllib.parse.quote(origin_name)}&destination={urllib.parse.quote(dest_name)}&travelmode={mode_param}"
                                 cell.hyperlink = maps_url
 
-                                # 所要時間に応じた色付け適用
+                                # 正確な時間算出と文字色指定（背景色は変えない）
                                 mins = parse_minutes(val)
                                 ccode = get_color_code(mode_param, mins)
-                                cell.fill = excel_color_styles[ccode]["fill"]
-                                cell.font = excel_color_styles[ccode]["font"]
+                                cell.font = excel_font_styles[ccode]
 
                     ws.column_dimensions['A'].width = max(max_a_len * 2.2, 22)
 
@@ -465,14 +465,13 @@ class handler(BaseHTTPRequestHandler):
                     else:
                         cell.alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
 
-                # 所要時間セルにハイパーリンク＆色付け適用
+                # 所要時間セルにハイパーリンク＆文字色のみ適用
                 time_cell = ws_station.cell(row=last_row, column=6)
                 time_cell.hyperlink = route_url
                 
                 mins = parse_minutes(time_txt)
                 ccode = get_color_code(mode, mins)
-                time_cell.fill = excel_color_styles[ccode]["fill"]
-                time_cell.font = excel_color_styles[ccode]["font"]
+                time_cell.font = excel_font_styles[ccode]
 
             for idx, width in enumerate(col_widths_st, start=1):
                 ws_station.column_dimensions[get_column_letter(idx)].width = width
