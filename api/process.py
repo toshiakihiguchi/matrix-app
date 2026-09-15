@@ -31,6 +31,46 @@ def get_filename_prefix(dept_time_str):
         return f"{month}{day}"
     return "0000"
 
+def parse_minutes(text):
+    """文字列から所要時間（分）の数字を抽出"""
+    if not text:
+        return 0
+    m = re.search(r'(\d+)\s*分', str(text))
+    if m:
+        return int(m.group(1))
+    # 時間表記（例：1時間20分）対応
+    m_h = re.search(r'(\d+)\s*時間(?:\s*(\d+)\s*分)?', str(text))
+    if m_h:
+        hours = int(m_h.group(1))
+        mins = int(m_h.group(2)) if m_h.group(2) else 0
+        return hours * 60 + mins
+    return 0
+
+def get_color_code(mode, minutes):
+    """モードと所要時間（分）から 'blue' / 'yellow' / 'red' を判定"""
+    if mode == "walking":
+        if minutes <= 15:
+            return "blue"
+        elif minutes <= 20:
+            return "yellow"
+        else:
+            return "red"
+    elif mode == "transit":
+        if minutes <= 40:
+            return "blue"
+        elif minutes <= 60:
+            return "yellow"
+        else:
+            return "red"
+    elif mode == "driving":
+        if minutes <= 20:
+            return "blue"
+        elif minutes <= 30:
+            return "yellow"
+        else:
+            return "red"
+    return "blue"
+
 class handler(BaseHTTPRequestHandler):
     def do_POST(self):
         try:
@@ -137,7 +177,6 @@ class handler(BaseHTTPRequestHandler):
                 clean_json_str = json_match.group(0) if json_match else res_text
                 result_data = json.loads(clean_json_str)
 
-                # action == 'parse' の場合は画面側へJSONデータを返却
                 if action == "parse":
                     self.send_response(200)
                     self.send_header('Content-Type', 'application/json; charset=utf-8')
@@ -181,6 +220,12 @@ class handler(BaseHTTPRequestHandler):
                     'JPMapCell', fontName='HeiseiKakuGo-W5', fontSize=7.5, leading=9, alignment=0
                 )
 
+                pdf_color_map = {
+                    "blue": "#0000FF",
+                    "yellow": "#B8860B", # 視認性の高い暗めゴールド/イエロー
+                    "red": "#DC2626"
+                }
+
                 modes = [("公共交通機関", "transit", "transit"), ("車利用", "driving", "driving"), ("徒歩利用", "walking", "walking")]
 
                 for idx, (mode_title, data_key, mode_param) in enumerate(modes):
@@ -207,8 +252,12 @@ class handler(BaseHTTPRequestHandler):
                                 if origin_name == dest_name or val in ["同地点", "-"]:
                                     row_cells.append(Paragraph("-", cell_style))
                                 else:
+                                    mins = parse_minutes(val)
+                                    ccode = get_color_code(mode_param, mins)
+                                    hex_color = pdf_color_map[ccode]
+
                                     maps_url = f"https://www.google.com/maps/dir/?api=1&origin={urllib.parse.quote(origin_name)}&destination={urllib.parse.quote(dest_name)}&travelmode={mode_param}"
-                                    link_html = f'<a href="{maps_url}"><font color="#0000FF"><u>{val}</u></font></a>'
+                                    link_html = f'<a href="{maps_url}"><font color="{hex_color}"><u>{val}</u></font></a>'
                                     row_cells.append(Paragraph(link_html, cell_style))
                             table_data.append(row_cells)
 
@@ -224,7 +273,7 @@ class handler(BaseHTTPRequestHandler):
                         ]))
                         elements.append(t)
 
-                # 最寄り駅詳細ページ追加 (PDF)
+                # 最寄り駅詳細ページ (PDF)
                 elements.append(PageBreak())
                 elements.append(Paragraph("<b>■ 直近の最寄り駅詳細一覧</b>", title_style))
                 elements.append(Spacer(1, 10))
@@ -240,6 +289,10 @@ class handler(BaseHTTPRequestHandler):
                     time_txt = st.get("travel_time_text", "")
                     mode = st.get("travel_mode", "walking")
 
+                    mins = parse_minutes(time_txt)
+                    ccode = get_color_code(mode, mins)
+                    hex_color = pdf_color_map[ccode]
+
                     route_url = f"https://www.google.com/maps/dir/?api=1&origin={urllib.parse.quote(addr)}&destination={urllib.parse.quote(st_name)}&travelmode={mode}"
                     
                     row = [
@@ -248,7 +301,7 @@ class handler(BaseHTTPRequestHandler):
                         Paragraph(addr, map_style),
                         Paragraph(st_name, map_style),
                         Paragraph(line, map_style),
-                        Paragraph(f'<a href="{route_url}"><font color="#0000FF"><u>{time_txt}</u></font></a>', cell_style)
+                        Paragraph(f'<a href="{route_url}"><font color="{hex_color}"><u>{time_txt}</u></font></a>', cell_style)
                     ]
                     station_table_data.append(row)
 
@@ -280,7 +333,22 @@ class handler(BaseHTTPRequestHandler):
             header_fill = PatternFill(start_color="1F4E78", end_color="1F4E78", fill_type="solid")
             header_font = Font(name="Meiryo", size=10, bold=True, color="FFFFFF")
             body_font = Font(name="Meiryo", size=9.5)
-            link_font = Font(name="Meiryo", size=9.5, color="004B91", underline="single")
+            
+            # Excel用 パステルカラー指定（ソフトで見やすい配色）
+            excel_color_styles = {
+                "blue": {
+                    "fill": PatternFill(start_color="E6F0FA", fill_type="solid"),
+                    "font": Font(name="Meiryo", size=9.5, color="1E40AF", underline="single", bold=True)
+                },
+                "yellow": {
+                    "fill": PatternFill(start_color="FEF9C3", fill_type="solid"),
+                    "font": Font(name="Meiryo", size=9.5, color="854D0E", underline="single", bold=True)
+                },
+                "red": {
+                    "fill": PatternFill(start_color="FEE2E2", fill_type="solid"),
+                    "font": Font(name="Meiryo", size=9.5, color="991B1B", underline="single", bold=True)
+                }
+            }
             
             thin_border = Border(
                 left=Side(style='thin', color='D9D9D9'),
@@ -342,11 +410,16 @@ class handler(BaseHTTPRequestHandler):
                                 cell.value = str(val)
                                 maps_url = f"https://www.google.com/maps/dir/?api=1&origin={urllib.parse.quote(origin_name)}&destination={urllib.parse.quote(dest_name)}&travelmode={mode_param}"
                                 cell.hyperlink = maps_url
-                                cell.font = link_font
+
+                                # 所要時間に応じた色付け適用
+                                mins = parse_minutes(val)
+                                ccode = get_color_code(mode_param, mins)
+                                cell.fill = excel_color_styles[ccode]["fill"]
+                                cell.font = excel_color_styles[ccode]["font"]
 
                     ws.column_dimensions['A'].width = max(max_a_len * 2.2, 22)
 
-            # 新設シート: 最寄り駅詳細
+            # 最寄り駅詳細シート (Excel)
             ws_station = wb.create_sheet(title="最寄り駅詳細")
             ws_station.freeze_panes = 'A2'
             headers_station = ["No.", "対象店舗・施設名", "所在地", "直近の最寄り駅", "路線名", "所要時間 (マップルート表示)"]
@@ -392,10 +465,14 @@ class handler(BaseHTTPRequestHandler):
                     else:
                         cell.alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
 
-                # 所要時間セルにルート検索URLを適用
+                # 所要時間セルにハイパーリンク＆色付け適用
                 time_cell = ws_station.cell(row=last_row, column=6)
                 time_cell.hyperlink = route_url
-                time_cell.font = link_font
+                
+                mins = parse_minutes(time_txt)
+                ccode = get_color_code(mode, mins)
+                time_cell.fill = excel_color_styles[ccode]["fill"]
+                time_cell.font = excel_color_styles[ccode]["font"]
 
             for idx, width in enumerate(col_widths_st, start=1):
                 ws_station.column_dimensions[get_column_letter(idx)].width = width
@@ -442,7 +519,7 @@ class handler(BaseHTTPRequestHandler):
 
                 map_cell = ws_map.cell(row=last_row, column=5)
                 map_cell.hyperlink = map_url
-                map_cell.font = link_font
+                map_cell.font = Font(name="Meiryo", size=9.5, color="004B91", underline="single")
 
             for idx, width in enumerate(col_widths, start=1):
                 ws_map.column_dimensions[get_column_letter(idx)].width = width
