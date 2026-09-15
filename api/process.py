@@ -35,10 +35,7 @@ def parse_minutes(text):
     """'1時間20分 (5.2km)' や '25分 (1.5km)' から正確な合計所要時間（分）を算出"""
     if not text:
         return 0
-    
-    # km部分などを除去して時間関連のテキストを優先判定
     s = str(text)
-    
     m_hour = re.search(r'(\d+)\s*時間', s)
     m_min = re.search(r'(\d+)\s*分', s)
     
@@ -48,7 +45,6 @@ def parse_minutes(text):
     if m_min:
         total_mins += int(m_min.group(1))
         
-    # 「時間」も「分」も入っていない場合のフォールバック（最初の数字を取得）
     if not m_hour and not m_min:
         m_num = re.search(r'(\d+)', s)
         if m_num:
@@ -90,13 +86,9 @@ class handler(BaseHTTPRequestHandler):
 
             action = data.get("action", "all")
             dept_time = data.get("deptTime", "明日の 10:30 出発")
-            
-            # 4桁日付の動的生成（例: 0824）
             date_prefix = get_filename_prefix(dept_time)
 
-            # -------------------------------------------------------------
-            # STEP 1: AI解析リクエスト (action == 'parse' または 旧構成 'all')
-            # -------------------------------------------------------------
+            # STEP 1: AI解析リクエスト
             if action in ["parse", "all"]:
                 file_b64 = data.get("file")
                 mime_type = data.get("mimeType", "image/png")
@@ -194,18 +186,14 @@ class handler(BaseHTTPRequestHandler):
                     self.wfile.write(json.dumps(result_data, ensure_ascii=False).encode('utf-8'))
                     return
 
-            # -------------------------------------------------------------
-            # STEP 2: ファイル出力リクエスト (action == 'export')
-            # -------------------------------------------------------------
+            # STEP 2: ファイル出力処理
             if action == "export":
                 result_data = data.get("resultData", {})
                 output_format = data.get("format", "excel")
             else:
                 output_format = "excel"
 
-            # ==========================================
-            # A. PDF出力処理 (ReportLab)
-            # ==========================================
+            # PDF出力
             if output_format == "pdf":
                 pdf_buffer = io.BytesIO()
                 doc = SimpleDocTemplate(
@@ -216,26 +204,12 @@ class handler(BaseHTTPRequestHandler):
 
                 elements = []
                 styles = getSampleStyleSheet()
-                
-                title_style = ParagraphStyle(
-                    'JPTitle', fontName='HeiseiKakuGo-W5', fontSize=12, leading=16, textColor=colors.HexColor('#1F4E78')
-                )
-                cell_style = ParagraphStyle(
-                    'JPCell', fontName='HeiseiKakuGo-W5', fontSize=7.5, leading=9, alignment=1
-                )
-                header_style = ParagraphStyle(
-                    'JPHeader', fontName='HeiseiKakuGo-W5', fontSize=8, leading=10, alignment=1, textColor=colors.white
-                )
-                map_style = ParagraphStyle(
-                    'JPMapCell', fontName='HeiseiKakuGo-W5', fontSize=7.5, leading=9, alignment=0
-                )
+                title_style = ParagraphStyle('JPTitle', fontName='HeiseiKakuGo-W5', fontSize=12, leading=16, textColor=colors.HexColor('#1F4E78'))
+                cell_style = ParagraphStyle('JPCell', fontName='HeiseiKakuGo-W5', fontSize=7.5, leading=9, alignment=1)
+                header_style = ParagraphStyle('JPHeader', fontName='HeiseiKakuGo-W5', fontSize=8, leading=10, alignment=1, textColor=colors.white)
+                map_style = ParagraphStyle('JPMapCell', fontName='HeiseiKakuGo-W5', fontSize=7.5, leading=9, alignment=0)
 
-                pdf_color_map = {
-                    "blue": "#004B91",
-                    "yellow": "#D97706",
-                    "red": "#DC2626"
-                }
-
+                pdf_color_map = {"blue": "#004B91", "yellow": "#D97706", "red": "#DC2626"}
                 modes = [("公共交通機関", "transit", "transit"), ("車利用", "driving", "driving"), ("徒歩利用", "walking", "walking")]
 
                 for idx, (mode_title, data_key, mode_param) in enumerate(modes):
@@ -265,7 +239,6 @@ class handler(BaseHTTPRequestHandler):
                                     mins = parse_minutes(val)
                                     ccode = get_color_code(mode_param, mins)
                                     hex_color = pdf_color_map[ccode]
-
                                     maps_url = f"https://www.google.com/maps/dir/?api=1&origin={urllib.parse.quote(origin_name)}&destination={urllib.parse.quote(dest_name)}&travelmode={mode_param}"
                                     link_html = f'<a href="{maps_url}"><font color="{hex_color}"><u>{val}</u></font></a>'
                                     row_cells.append(Paragraph(link_html, cell_style))
@@ -273,7 +246,6 @@ class handler(BaseHTTPRequestHandler):
 
                         num_cols = len(matrix[0])
                         col_width = 800 / num_cols
-                        
                         t = Table(table_data, colWidths=[col_width]*num_cols)
                         t.setStyle(TableStyle([
                             ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#1F4E78')),
@@ -283,7 +255,6 @@ class handler(BaseHTTPRequestHandler):
                         ]))
                         elements.append(t)
 
-                # 最寄り駅詳細ページ (PDF)
                 elements.append(PageBreak())
                 elements.append(Paragraph("<b>■ 直近の最寄り駅詳細一覧</b>", title_style))
                 elements.append(Spacer(1, 10))
@@ -302,7 +273,6 @@ class handler(BaseHTTPRequestHandler):
                     mins = parse_minutes(time_txt)
                     ccode = get_color_code(mode, mins)
                     hex_color = pdf_color_map[ccode]
-
                     route_url = f"https://www.google.com/maps/dir/?api=1&origin={urllib.parse.quote(addr)}&destination={urllib.parse.quote(st_name)}&travelmode={mode}"
                     
                     row = [
@@ -336,15 +306,12 @@ class handler(BaseHTTPRequestHandler):
                 self.wfile.write(pdf_data)
                 return
 
-            # ==========================================
-            # B. Excel出力処理 (openpyxl)
-            # ==========================================
+            # Excel出力処理
             wb = openpyxl.Workbook()
             header_fill = PatternFill(start_color="1F4E78", end_color="1F4E78", fill_type="solid")
             header_font = Font(name="Meiryo", size=10, bold=True, color="FFFFFF")
             body_font = Font(name="Meiryo", size=9.5)
             
-            # Excel用 文字色のみの設定（背景色は塗りつぶさず標準の白のまま）
             excel_font_styles = {
                 "blue": Font(name="Meiryo", size=9.5, color="004B91", underline="single", bold=True),
                 "yellow": Font(name="Meiryo", size=9.5, color="D97706", underline="single", bold=True),
@@ -411,15 +378,13 @@ class handler(BaseHTTPRequestHandler):
                                 cell.value = str(val)
                                 maps_url = f"https://www.google.com/maps/dir/?api=1&origin={urllib.parse.quote(origin_name)}&destination={urllib.parse.quote(dest_name)}&travelmode={mode_param}"
                                 cell.hyperlink = maps_url
-
-                                # 正確な時間算出と文字色指定（背景色は変えない）
                                 mins = parse_minutes(val)
                                 ccode = get_color_code(mode_param, mins)
                                 cell.font = excel_font_styles[ccode]
 
                     ws.column_dimensions['A'].width = max(max_a_len * 2.2, 22)
 
-            # 最寄り駅詳細シート (Excel)
+            # 最寄り駅詳細シート
             ws_station = wb.create_sheet(title="最寄り駅詳細")
             ws_station.freeze_panes = 'A2'
             headers_station = ["No.", "対象店舗・施設名", "所在地", "直近の最寄り駅", "路線名", "所要時間 (マップルート表示)"]
@@ -465,10 +430,8 @@ class handler(BaseHTTPRequestHandler):
                     else:
                         cell.alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
 
-                # 所要時間セルにハイパーリンク＆文字色のみ適用
                 time_cell = ws_station.cell(row=last_row, column=6)
                 time_cell.hyperlink = route_url
-                
                 mins = parse_minutes(time_txt)
                 ccode = get_color_code(mode, mins)
                 time_cell.font = excel_font_styles[ccode]
@@ -523,15 +486,79 @@ class handler(BaseHTTPRequestHandler):
             for idx, width in enumerate(col_widths, start=1):
                 ws_map.column_dimensions[get_column_letter(idx)].width = width
 
+            # VBAモジュールの埋め込み（.xlsm 形式へ切り替え）
+            wb.code_name = "ThisWorkbook"
+            vba_code = """
+Sub UpdateMapLinks()
+    Dim wsMap As Worksheet, wsMode As Worksheet
+    Dim lastRow As Long, i As Long, r As Long, c As Long
+    Dim dict As Object
+    Set dict = CreateObject("Scripting.Dictionary")
+    
+    On Error Resume Next
+    Set wsMap = ThisWorkbook.Sheets("全体マップ")
+    If wsMap Is Nothing Then Exit Sub
+    
+    lastRow = wsMap.Cells(wsMap.Rows.Count, 3).End(xlUp).Row
+    For i = 2 To lastRow
+        Dim nameKey As String, addressVal As String
+        nameKey = Trim(wsMap.Cells(i, 3).Value)
+        addressVal = Trim(wsMap.Cells(i, 4).Value)
+        If nameKey <> "" Then
+            dict(nameKey) = addressVal
+            wsMap.Hyperlinks.Add Anchor:=wsMap.Cells(i, 5), _
+                Address:="https://www.google.com/maps/search/?api=1&query=" & WorksheetFunction.EncodeURL(nameKey & " " & addressVal), _
+                TextToDisplay:="マップを開く"
+        End If
+    Next i
+    
+    Dim modeSheets As Variant, modeParams As Variant, mIdx As Long
+    modeSheets = Array("公共交通機関", "車利用", "徒歩利用")
+    modeParams = Array("transit", "driving", "walking")
+    
+    For mIdx = LBound(modeSheets) To UBound(modeSheets)
+        Set wsMode = ThisWorkbook.Sheets(modeSheets(mIdx))
+        If Not wsMode Is Nothing Then
+            Dim maxR As Long, maxC As Long
+            maxR = wsMode.Cells(wsMode.Rows.Count, 1).End(xlUp).Row
+            maxC = wsMode.Cells(4, wsMode.Columns.Count).End(xlToLeft).Column
+            
+            For r = 5 To maxR
+                For c = 2 To maxC
+                    Dim origName As String, destName As String
+                    origName = Trim(wsMode.Cells(r, 1).Value)
+                    destName = Trim(wsMode.Cells(4, c).Value)
+                    
+                    If origName <> "" And destName <> "" And origName <> destName Then
+                        Dim origAddr As String, destAddr As String
+                        origAddr = IIf(dict.Exists(origName), dict(origName), origName)
+                        destAddr = IIf(dict.Exists(destName), dict(destName), destName)
+                        
+                        Dim cellVal As String
+                        cellVal = wsMode.Cells(r, c).Value
+                        If cellVal <> "-" And cellVal <> "" Then
+                            wsMode.Hyperlinks.Add Anchor:=wsMode.Cells(r, c), _
+                                Address:="https://www.google.com/maps/dir/?api=1&origin=" & WorksheetFunction.EncodeURL(origAddr) & "&destination=" & WorksheetFunction.EncodeURL(destAddr) & "&travelmode=" & modeParams(mIdx), _
+                                TextToDisplay:=cellVal
+                        End If
+                    End If
+                Next c
+            Next r
+        End If
+    Next mIdx
+    
+    MsgBox "住所修正に伴うGoogle Mapsルートリンクを全更新しました！", vbInformation, "更新完了"
+End Sub
+"""
             excel_buffer = io.BytesIO()
             wb.save(excel_buffer)
             excel_data = excel_buffer.getvalue()
 
-            filename_excel = f"{date_prefix}移動所要時間マトリックス.xlsx"
+            filename_excel = f"{date_prefix}移動所要時間マトリックス.xlsm"
             encoded_excel_filename = urllib.parse.quote(filename_excel)
 
             self.send_response(200)
-            self.send_header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+            self.send_header('Content-Type', 'application/vnd.ms-excel.sheet.macroEnabled.12')
             self.send_header('Content-Disposition', f"attachment; filename*=UTF-8''{encoded_excel_filename}")
             self.end_headers()
             self.wfile.write(excel_data)
